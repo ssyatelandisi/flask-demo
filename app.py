@@ -1,5 +1,4 @@
 import threading, sys
-from base64 import b64decode, b64encode
 from flask import (
     Flask,
     make_response,
@@ -9,6 +8,7 @@ from flask import (
     render_template,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.routing import BaseConverter
 from requests import get
 from urllib.parse import urljoin, urlparse
 from os import getenv, path, makedirs
@@ -108,16 +108,11 @@ app = Flask(__name__, template_folder=TEMP_FOLDER)
 def home():
     if CONSOLE_RESOURCE:
         template_dict = {
-            "playPage": "/play/?url={}".format(
-                b64encode(CONSOLE_RESOURCE.encode()).decode()
-            ),
-            "file_name": f"播放 {HOME_FILE_NAME}",
+            "file_name": f"📺播放 {HOME_FILE_NAME}",
+            "resource": CONSOLE_RESOURCE,
         }
     else:
-        template_dict = {
-            "playPage": "",
-            "file_name": "",
-        }
+        template_dict = {"file_name": "", "resource": None}
     return render_template("home.html", **template_dict)
 
 
@@ -128,15 +123,27 @@ def favicon():
     )
 
 
+# 自定义正则路由规则
+class ResourceConverter(BaseConverter):
+    def __init__(self, url_map, *args):
+        super(ResourceConverter, self).__init__(url_map)
+        self.regex = args[0]
+
+
+# 添加到自定义的路由规则
+app.url_map.converters["re"] = ResourceConverter
+
 # 播放页面
-@app.route("/play/")
+@app.route("/play", methods=["POST"])
 def play():
-    if request.args.get("url"):
-        player = Player(
-            b64decode(request.args.get("url").replace(" ", "+").encode()).decode()
-        )
+    resource = request.form.get("resource")
+    if resource:
+        player = Player(resource)
         player.run()
-        template_dict = {"file_name": player.fileName, "video_src": player.video_src}
+        template_dict = {
+            "file_name": player.fileName,
+            "video_src": player.video_src,
+        }
         return render_template("play.html", **template_dict)
     else:
         return redirect("/")
