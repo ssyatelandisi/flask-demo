@@ -1,0 +1,12 @@
+.vscode/
+__pycache__/
+build/
+dist/
+*.mp4
+*.spec
+test/
+test.*
+upload/
+server*
+.python-version
+uv.lock
