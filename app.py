@@ -1,126 +1,80 @@
-import threading, sys
 from flask import (
     Flask,
-    make_response,
-    send_from_directory,
     request,
-    redirect,
+    make_response,
     render_template,
+    send_file,
+    redirect,
+    send_from_directory,
 )
-from werkzeug.utils import secure_filename
+from flask_compress import Compress # type: ignore
 from werkzeug.routing import BaseConverter
-from requests import get
-from urllib.parse import urljoin, urlparse
-from os import getenv, path, makedirs
-from re import search
-from colorama import init, Fore, Back, Style
+import os, logging, json, sys
 
-init(autoreset=True)
+logging.basicConfig(level=logging.INFO)
 
-CONSOLE_RESOURCE = None
-HOME_FILE_NAME = None
+try:
+    TEMP_FOLDER = os.path.join(sys._MEIPASS, "templates") # type: ignore
+except:
+    TEMP_FOLDER = "templates"
 
-
-def console_input():
-    global CONSOLE_RESOURCE
-    global HOME_FILE_NAME
-    while True:
-        print(Fore.MAGENTA + Style.BRIGHT + "控制台输入视频源>")
-        CONSOLE_RESOURCE = input().strip()
-        CONSOLE_RESOURCE = CONSOLE_RESOURCE if CONSOLE_RESOURCE else None
-        print(
-            Back.YELLOW
-            + Style.BRIGHT
-            + "{:^7}".format("INFO")
-            + Back.RESET
-            + Style.BRIGHT
-            + " 输入完成"
-        )
-        consolePlay = Player(CONSOLE_RESOURCE)
-        consolePlay.run()
-        HOME_FILE_NAME = consolePlay.fileName
+app = Flask(
+    __name__,
+    template_folder=TEMP_FOLDER,
+    static_folder=TEMP_FOLDER,
+    static_url_path="/",
+)
+Compress(app)
 
 
-class Player:
-    def __init__(self, inputResource):
-        self.url = inputResource
-        self.uri = urljoin(self.url, "./")
-        self.parseResult = urlparse(inputResource)
-        _, self.extension = path.splitext(self.parseResult.path)
-        self.fileName = path.split(self.parseResult.path)[-1]
-        print(
-            Fore.WHITE
-            + Back.YELLOW
-            + Style.BRIGHT
-            + "{:^7}".format("INFO")
-            + Style.RESET_ALL
-            + " 播放源 "
-            + Back.MAGENTA
-            + Style.BRIGHT
-            + self.fileName
-            + Style.RESET_ALL
+class Logger:
+    DEBUG = 37
+    INFO = 36
+    WARNING = 33
+    ERROR = 31
+    CRITICAL = 41
+    PREFIX = "\033["
+    SUFFIX = "\033[0m"
+
+    @staticmethod
+    def debug(msg):
+        logging.debug(
+            "{0}{1}m{2}{3}".format(
+                __class__.PREFIX, __class__.DEBUG, msg, __class__.SUFFIX
+            )
         )
 
-    def download_m3u8(self):
-        headers = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.89 Safari/537.36",
-            "origin": self.parseResult.scheme + "://" + self.parseResult.netloc,
-            "referer": self.uri,
-            "host": self.parseResult.netloc,
-        }
-        response = get(url=self.url, headers=headers, stream=True)
-        with open(path.join(getenv("TEMP"), self.fileName), "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                f.write(chunk)
-        with open(
-            path.join(getenv("TEMP"), self.fileName), "r", encoding="utf-8"
-        ) as fr:
-            with open(self.fileName, "w", encoding="utf-8", newline="") as fw:
-                for line in fr:
-                    if (
-                        search(r"^[^#]", line)
-                        and search(".ts", line)
-                        and "" == urlparse(line).scheme
-                    ):
-                        fw.write(urljoin(self.uri, line))
-                    else:
-                        fw.write(line)
+    @staticmethod
+    def info(msg):
+        logging.info(
+            "{0}{1}m{2}{3}".format(
+                __class__.PREFIX, __class__.INFO, msg, __class__.SUFFIX
+            )
+        )
 
-    def run(self):
-        if "" == self.parseResult.scheme:
-            self.video_src = f"/{self.fileName}"
-        else:
-            if ".m3u8" == self.extension.lower():
-                self.download_m3u8()
-                self.video_src = f"/{self.fileName}"
-            else:
-                self.video_src = self.url
+    @staticmethod
+    def warning(msg):
+        logging.warning(
+            "{0}{1}m{2}{3}".format(
+                __class__.PREFIX, __class__.WARNING, msg, __class__.SUFFIX
+            )
+        )
 
+    @staticmethod
+    def error(msg):
+        logging.error(
+            "{0}{1}m{2}{3}".format(
+                __class__.PREFIX, __class__.ERROR, msg, __class__.SUFFIX
+            )
+        )
 
-import sys
-
-TEMP_FOLDER = path.join(sys._MEIPASS, "templates")
-app = Flask(__name__, template_folder=TEMP_FOLDER)
-# app = Flask(__name__)
-
-
-@app.route("/")
-def home():
-    if CONSOLE_RESOURCE:
-        template_dict = {
-            "file_name": f"📺播放 {HOME_FILE_NAME}",
-            "resource": CONSOLE_RESOURCE,
-        }
-    else:
-        template_dict = {"file_name": "", "resource": None}
-    return render_template("home.html", **template_dict)
-
-
-@app.route("/favicon.ico")
-def favicon():
-    return send_from_directory(
-        TEMP_FOLDER, "favicon.ico", mimetype="image/vnd.microsoft.icon",
-    )
+    @staticmethod
+    def critical(msg):
+        logging.critical(
+            "{0}{1}m{2}{3}".format(
+                __class__.PREFIX, __class__.CRITICAL, msg, __class__.SUFFIX
+            )
+        )
 
 
 # 自定义正则路由规则
@@ -133,127 +87,118 @@ class ResourceConverter(BaseConverter):
 # 添加到自定义的路由规则
 app.url_map.converters["re"] = ResourceConverter
 
-# 播放页面
-@app.route("/play", methods=["POST"])
-def play():
-    resource = request.form.get("resource")
-    if resource:
-        player = Player(resource)
-        player.run()
-        template_dict = {
-            "file_name": player.fileName,
-            "video_src": player.video_src,
-        }
-        return render_template("play.html", **template_dict)
-    else:
-        return redirect("/")
 
-
-# js
-@app.route("/<string:jsName>.js")
-def js(jsName):
+# favicon.ico图标
+@app.route("/favicon.ico")
+def favicon():
     response = make_response(
-        send_from_directory(TEMP_FOLDER, jsName + ".js", as_attachment=True)
+        send_from_directory(
+            "templates",
+            "favicon.ico",
+            mimetype="image/vnd.microsoft.icon",
+        )
     )
-    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Cache-Control"] = "public"
     return response
 
 
+@app.before_request
+def before():
+    if request.method == "OPTIONS":
+        return make_response()
+
+
+@app.after_request
+def after_request(res):
+    res.headers["Access-Control-Allow-Origin"] = "*"
+    res.headers["Access-Control-Allow-Methods"] = "*"
+    res.headers["Access-Control-Allow-Headers"] = "*"
+    return res
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+def filename_check(filename: str):
+    return (
+        filename.replace("\\", "")
+        .replace("/", "")
+        .replace("*", "")
+        .replace("?", "")
+        .replace(":", "")
+        .replace('"', "")
+        .replace("<", "")
+        .replace(">", "")
+        .replace("|", "")
+    )
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    if request.method == "GET":
+        return redirect("/api")
+    else:
+        res = make_response()
+        try:
+            uploadedFile = request.files.get("file")
+            if uploadedFile.filename == "":
+                pass
+            else:
+                if os.path.exists("upload"):
+                    pass
+                else:
+                    os.makedirs("upload")
+                uploadedFile.save(f"upload/{filename_check(uploadedFile.filename)}")
+                res.status = 200
+                res.data = "success"
+                Logger.info("{0}上传成功".format(uploadedFile.filename))
+        except:
+            res.status = 200
+            res.data = "fail"
+        return res
+
+
+@app.route("/api", methods=["GET", "POST", "OPTIONS"])
+def api():
+    res = make_response()
+    res.headers["Content-Type"] = "application/json; charset=utf-8"
+    res.data = json.dumps(dict(request.headers), ensure_ascii=False)
+    return res
+
+
+@app.route("/ca")
+def ca():
+    return send_file(
+        os.path.join(os.path.dirname(sys.argv[0]), "rootCA.crt"),
+        download_name="WareyumeCA.crt",
+    )
+
+
 # 请求本地资源
-@app.route("/<string:resource>")
-def local(resource):
+@app.route("/<re('.*\.mp4|.*\.flv|.*\.m3u8'):resource>")
+def local_resource(resource):
     response = make_response(
-        send_from_directory(app.root_path, resource, as_attachment=True)
+        send_from_directory(os.path.dirname(sys.argv[0]), resource, as_attachment=True)
     )
     response.headers["Access-Control-Allow-Credentials"] = "false"
-    response.headers[
-        "Access-Control-Allow-Headers"
-    ] = "Date,Server,x-oss-request-id,x-oss-cdn-auth,Last-Modified,x-oss-object-type,x-oss-hash-crc64ecma,x-oss-storage-class,x-oss-server-time,Ali-Swift-Global-Savetime,X-Cache,X-Swift-SaveTime,X-Swift-CacheTime,Access-Control-Allow-Origin,Access-Control-Expose-Headers,cloud_type,Timing-Allow-Origin,EagleId,x-hcs-proxy-type,nginx-hit,Age,Content-Type,Content-Length,ETag,Content-MD5,Accept-Ranges"
-    response.headers["Access-Control-Allow-Methods"] = "GET"
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers[
-        "Access-Control-Expose-Headers"
-    ] = "Date, Server, x-oss-request-id, x-oss-cdn-auth, Last-Modified, x-oss-object-type, x-oss-hash-crc64ecma, x-oss-storage-class, x-oss-server-time, Ali-Swift-Global-Savetime, X-Cache, X-Swift-SaveTime, X-Swift-CacheTime, Access-Control-Allow-Origin, Access-Control-Expose-Headers, cloud_type, Timing-Allow-Origin, EagleId, x-hcs-proxy-type, nginx-hit, Age, Content-Type, Content-Length, ETag, Content-MD5, Accept-Ranges"
     response.headers["Accept-Ranges"] = "bytes"
     return response
 
 
-# 文件上传
-@app.route("/upload", methods=["GET", "POST"])
-def upload():
-    if request.method == "POST":
-        if not path.exists("upload_files"):
-            makedirs("upload_files")
-        for file in request.files.getlist("files"):
-            filename = secure_filename(file.filename)
-            file.save(path.join("upload_files", filename))
-            print(
-                Back.YELLOW
-                + Style.BRIGHT
-                + "{:^7}".format("INFO")
-                + Back.RESET
-                + " 文件 "
-                + Fore.CYAN
-                + f"{filename}"
-                + Fore.RESET
-                + " 上传成功"
-            )
-        return """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>上传成功</title></head><body><script>alert('上传成功，即将返回上传页面'); location.href='/upload'; </script></body></html>"""
-    else:
-        return render_template("upload.html")
-
-
 @app.errorhandler(404)
 def page_no_found(e):
-    return redirect("/")
-
-
-@app.errorhandler(500)
-def handle_500(e):
-    return redirect("/")
-
-
-import socket
-
-
-class LAN_IP:
-    ip = "127.0.0.1"
-    length = len(ip)
-
-    def __init__(self):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("10.0.0.1", 80))
-            self.ip = s.getsockname()[0]
-            self.length = len(self.ip)
-        finally:
-            s.close()
+    return redirect("/#/error", 302)
 
 
 if __name__ == "__main__":
-    LOCAL_IP = LAN_IP()
-    print(
-        Style.BRIGHT
-        + " * 本地浏览　 "
-        + Back.GREEN
-        + Style.BRIGHT
-        + "http://127.0.0.1".ljust(LOCAL_IP.length + 7)
-        + Style.RESET_ALL
-        + Style.BRIGHT
-        + " 访问"
-        + Style.RESET_ALL
-    )
-    print(
-        Style.BRIGHT
-        + " * 局域网浏览 "
-        + Back.GREEN
-        + Style.BRIGHT
-        + f"http://{LOCAL_IP.ip}".ljust(LOCAL_IP.length + 7)
-        + Style.RESET_ALL
-        + Style.BRIGHT
-        + " 访问"
-    )
-    print(" * " + Back.RED + Style.BRIGHT + "按 CTRL + C 退出" + Style.RESET_ALL)
-    threading.Thread(target=console_input).start()
-    app.run(host="0.0.0.0", port=80)
-
+    if "ssl" in sys.argv or "https" in sys.argv:
+        app.run(
+            host="0.0.0.0",
+            port=443,
+            ssl_context=("server.pem", "server.key"),
+            debug=False,
+        )
+    else:
+        app.run(host="0.0.0.0", port=80, debug=False)

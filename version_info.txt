@@ -30,12 +30,12 @@ VSVersionInfo(
       StringTable(
         u'080404b0',
         [StringStruct(u'CompanyName', u'ssyatelandisi'),
-        StringStruct(u'FileDescription', u'下载包含完整ts路径的m3u8'),
+        StringStruct(u'FileDescription', u'Flask App'),
         StringStruct(u'FileVersion', u'1.0.0.1'),
-        StringStruct(u'InternalName', u'm3u8parse.exe'),
-        StringStruct(u'LegalCopyright', u'©2018-2020 ssyatelandisi'),
-        StringStruct(u'OriginalFilename', u'm3u8parse.exe'),
-        StringStruct(u'ProductName', u'm3u8parse.exe'),
+        StringStruct(u'InternalName', u'Flask App.exe'),
+        StringStruct(u'LegalCopyright', u'©2018-2023 ssyatelandisi'),
+        StringStruct(u'OriginalFilename', u'Flask App.exe'),
+        StringStruct(u'ProductName', u'Flask App.exe'),
         StringStruct(u'ProductVersion', u'1.0.0.1')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
